@@ -1,5 +1,13 @@
 function data_out=generate_struct_treadmill(animal_name,time_dir,video_dir,mat_dir,thermal_dir)
-
+if nargin<3 || isempty(video_dir)
+    video_dir=time_dir;
+end
+if nargin<4 || isempty(mat_dir)
+    mat_dir=time_dir;
+end
+if nargin<5 || isempty(thermal_dir)
+    thermal_dir=video_dir;
+end
 timestamp_file=['*',animal_name,'*.txt'];
         bin_file=['*',animal_name,'*_pupil.bin'];
         matlab_file=['*',animal_name,'*.mat'];

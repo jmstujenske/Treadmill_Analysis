@@ -1,3 +1,3 @@
 function out=dir2file(in)
-out=[in.folder,'\',in.name];
+out=fullfile(in.folder,in.name);
 end
