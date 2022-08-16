@@ -16,6 +16,8 @@ end
 fr=28;
 subsample_factor=5;
 init_batch=500;
+chunk_size=20000;
+
 if diff(frames)+1<fr*2
     error('Not enough frames.');
 end
@@ -109,7 +111,6 @@ for a=1:length(shifts1)
 %     shifts2(a).(f_names{b})=shifts2(a).(f_names{b})*subsample_factor;
     end
 end
-chunk_size=20000;
 fid_w=fopen(fullfile(path,[name,'_temp.bin']),'w');
 n_chunks=ceil((diff(frames)+1)/chunk_size);
 for chunk_rep=1:n_chunks
@@ -125,7 +126,7 @@ n_blocks=ceil(remainder/block_size);
 % options_nonrigid = NoRMCorreSetParms('d1',size(data,1),'d2',size(data,2),'grid_size',[12 12]*5,'overlap_pre',[6 6]*5,'mot_uf',4,'bin_width',3000,'max_shift',.2,'max_dev',[20 20],'us_fac',50,'init_batch',500);
 
 for a=1:n_blocks
-    M_final(:,:,min((a-1)*block_size+(1:1000),remainder))=apply_shifts(m_fid.Data.data(:,:,min((a-1)*block_size+(1:1000)+frames(1)-1+(chunk_rep-1)*chunk_size,nf_tot)),shifts1(min((a-1)*block_size+(1:1000)+(chunk_rep-1)*chunk_size,nf)),options_rigid);
+    M_final(:,:,min((a-1)*block_size+(1:block_size),remainder))=apply_shifts(m_fid.Data.data(:,:,min((a-1)*block_size+(1:block_size)+frames(1)-1+(chunk_rep-1)*chunk_size,nf_tot)),shifts1(min((a-1)*block_size+(1:block_size)+(chunk_rep-1)*chunk_size,nf)),options_rigid);
 end
 % M_final=motcorr_stack;
 M_final=permute(M_final,[2 1 3]);
