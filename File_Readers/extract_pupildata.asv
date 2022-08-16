@@ -69,12 +69,12 @@ while 1
         break;
     end
 end
-scale=max(10.^round(log10(nanmean(round(nanmean(data_out.pupil.radius)/20)))),1);
-toremove=abs(double(data_out.pupil.area)-medfilt1(double(data_out.pupil.area),90,'omitnan'))>5*scale;
-data_out.pupil.area(toremove)=NaN;
+double(data_out.pupil.area)-medfilt1(double(data_out.pupil.area),90,'omitnan')<.05*scale
+keyboard
 pupil2(isnan(data_out.pupil.area),:)=NaN;
 data_out.pupil.coords=pupil2(:,[1 2]);
 data_out.pupil.radius=pupil2(:,[3 4]);
+scale=max(10.^round(log10(nanmean(round(nanmean(data_out.pupil.radius)/20)))),1);
 
 tofix=isnan(data_out.pupil.area) | any(data_out.pupil.radius>200*scale,2);
 data_out.pupil.area(tofix)=interp1(find(~tofix),data_out.pupil.area(~tofix),find(tofix));

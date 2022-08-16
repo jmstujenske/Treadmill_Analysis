@@ -52,7 +52,9 @@ timestamp_file=['*',animal_name,'*.txt'];
             try
             data_out=treadmill_processmovementandlicks(data_out);
             end
+            try
             data_out=addDLCdata_treadmill(data_out,video_dir);
+            end
 %             if ~isempty(data_out.HR)
             try
             data_out=HR_fix2(data_out);

@@ -1,8 +1,33 @@
-function thermal_data=process_thermal_treadmill(filename,cam_start_time)
+function thermal_data=process_thermal_treadmill(filename,cam_start_time,frames)
+
 if nargin<2 || isempty(cam_start_time)
     cam_start_time=0;
 end
+if nargin<3 || isempty(frames)
+    frames=[1 inf];
+end
+if length(frames)==1
+    if ~isinf(frames(1))
+    frames=repmat(frames,1,2);
+    else
+        frames=[1 inf];
+    end
+end
+fr=28;
+subsample_factor=5;
+init_batch=500;
+if diff(frames)+1<fr*2
+    error('Not enough frames.');
+end
+
+if diff(frames)+1<init_batch*4
+    staggered=false;
+else
+    staggered=true;
+end
 % filename='H:\Treadmill_imaging_June2022\videos\grm2_mcherry_M1_licktrain3_thermal';
+
+
 if isstr(filename)
 [path,name,ext]=fileparts(filename);
 path=[path,'\'];
@@ -16,19 +41,41 @@ else
     frame_file=fullfile(filename(frame_in).folder,filename(frame_in).name);
 end
 fid=fopen(bin_file,'r');
-frame_stamps=importdata(frame_file);
+[path,name,ext]=fileparts(bin_file);
+fseek(fid,0,'eof');
+flen=ftell(fid);
+fclose(fid);
+f_w=320;
+f_h=240;
+nf_tot=flen/f_w/f_h/2;
+frames(isinf(frames))=nf_tot;
+nf=diff(frames)+1;
+    frame_stamps=importdata(frame_file);
 frame_stamps(:,1)=frame_stamps(:,1)+1;
 % frame_stamps(:,1)=1:length(frame_stamps(:,1));
 frame_stamps(:,2)=(frame_stamps(:,2)-frame_stamps(1,2))*1e3+double(cam_start_time);
-data=fread(fid,inf,'uint16');
-fr=28;
-data=reshape(double(data),320,240,[]);
-data(data<10000)=2^16-1+data(data<10000);
-subsample_factor=5;
-data_downsample=imresize(data,1/subsample_factor);
+frame_stamps=frame_stamps(frames(1):frames(2),:);
+if ~exist(fullfile(path,[name,'_temp.bin']))
+
+m_fid=memmapfile(bin_file,'Format',{'uint16' [f_w f_h nf_tot] 'data'},'Writable',true);
+firstn=1000;
+tofixfirst=double(m_fid.Data.data(:,:,min(1:firstn,nf_tot)))-imgaussfilt(double(m_fid.Data.data(:,:,min(1:firstn,nf_tot))),10)<-10000;
+tocorrect=m_fid.Data.data(:,:,min(1:firstn,nf_tot))<10000 & tofixfirst;
+if any(tocorrect,1:3)
+data_sub=m_fid.Data.data(:,:,min(1:firstn,nf_tot));
+data_sub(tocorrect)=2^16-1+data_sub(tocorrect);
+m_fid.Data.data(:,:,min(1:5000,nf_tot))=data_sub;
+end
+checkfix=find(m_fid.Data.data(:,:,1001:end)<10000);
+if ~isempty(checkfix)
+    m_fid.Data.data(checkfix)=2^16-1+m_fid.Data.data(checkfix);
+end
+
+data_downsample=imresize(m_fid.Data.data(:,:,frames(1):frames(2)),1/subsample_factor);
 % options_nonrigid = NoRMCorreSetParms('d1',size(data_downsample,1),'d2',size(data_downsample,2),'grid_size',[12 12],'overlap_pre',[6 6],'mot_uf',4,'bin_width',3000,'max_shift',.2,'max_dev',[20 20],'us_fac',50,'init_batch',500);
-options_rigid = NoRMCorreSetParms('d1',size(data_downsample,1),'d2',size(data_downsample,2),'bin_width',5000,'max_shift',10,'us_fac',50,'init_batch',500,'print_msg',false);
-nf=size(data_downsample,3);
+
+options_rigid = NoRMCorreSetParms('d1',size(data_downsample,1),'d2',size(data_downsample,2),'bin_width',5000,'max_shift',10,'us_fac',50,'init_batch',init_batch,'print_msg',false);
+% nf=size(data_downsample,3);
 
 trend=quantile(reshape(data_downsample,[],size(data_downsample,3)),.5,1);
 trend=trend./nanmean(trend);
@@ -36,25 +83,24 @@ trend(trend<.01)=.01;
 data_downsample=data_downsample./reshape(trend,1,1,[]);
 % cleaned_stack=((data_downsample)-imclose(data_downsample,strel('disk',15)));
 % data_ds=gpuArray(data_downsample);
-data_ds=gpuArray(uint8(data_downsample/(2^8)));
-cleaned_stack=double(gather(imopen(uint8(double(data_ds)-double(imclose(data_ds,strel('disk',20)))+100),strel('disk',1))));
+block_size=10000;
+nblock=nf/block_size;
+cleaned_stack=zeros(size(data_downsample),class(data_downsample));
+for block_rep=1:nblock
+data_ds=gpuArray(uint8(data_downsample(:,:,min((1:block_size)+(block_rep-1)*block_size,nf))/(2^8)));
+cleaned_stack(:,:,min((1:block_size)+(block_rep-1)*block_size,nf))=double(gather(imopen(uint8(double(data_ds)-double(imclose(data_ds,strel('disk',20)))+100),strel('disk',1))));
+end
 % cleaned_stack=imopen((data_downsample)-imclose(data_downsample,strel('disk',20)),strel('disk',1));
 % cleaned_stack=((data_downsample)-imclose(data_downsample,strel('disk',20)));
-tic; [motcorr_stack,shifts1,template1,options_rigid] = normcorre(single(cat(3,cleaned_stack(:,:,501:end),cleaned_stack(:,:,1:1000))),options_rigid); toc
-% tic; [motcorr_stack,shifts1,template1,options_rigid] = normcorre(cat(3,data_downsample(:,1:end-8,501:end),data_downsample(:,1:end-8,1:1000)),options_rigid); toc
-
-motcorr_stack=cat(3,motcorr_stack(:,:,end-999:end),motcorr_stack(:,:,501:end-1000));
-shifts1=shifts1([end-999:end 501:end-1000]);
-% tic; [motcorr_stack2,shifts2,template2,opti8-ons_nonrigid] = normcorre_batch(single(cat(3,motcorr_stack(:,:,501:end),motcorr_stack(:,:,1:1000))),options_nonrigid); toc
-% motcorr_stack2=cat(3,motcorr_stack2(:,:,end-999:end),motcorr_stack2(:,:,501:end-1000));
-% shifts2=shifts2([end-999:end 501:end-1000]);
-% subsample_factor=1;
-
-block_size=1000;
-M_final=zeros(size(data));
-n_blocks=ceil(nf/block_size);
-options_rigid = NoRMCorreSetParms('d1',size(data,1),'d2',size(data,2),'bin_width',5000,'max_shift',10,'us_fac',50,'init_batch',500,'print_msg',false);
-% options_nonrigid = NoRMCorreSetParms('d1',size(data,1),'d2',size(data,2),'grid_size',[12 12]*5,'overlap_pre',[6 6]*5,'mot_uf',4,'bin_width',3000,'max_shift',.2,'max_dev',[20 20],'us_fac',50,'init_batch',500);
+init_batch=min(init_batch,nf);
+if staggered
+tic; [~,shifts1,template1,options_rigid] = normcorre(single(cat(3,cleaned_stack(:,:,init_batch+1:end),cleaned_stack(:,:,1:init_batch*2))),options_rigid); toc
+% motcorr_stack=cat(3,motcorr_stack(:,:,end-init_batch*2+1:end),motcorr_stack(:,:,init_batch+1:end-init_batch*2));
+shifts1=shifts1([end-init_batch*2+1:end init_batch+1:end-init_batch*2]);
+else
+tic; [~,shifts1,template1,options_rigid] = normcorre(single(cleaned_stack),options_rigid); toc
+end
+options_rigid = NoRMCorreSetParms('d1',size(m_fid.Data.data,1),'d2',size(m_fid.Data.data,2),'bin_width',5000,'max_shift',10,'us_fac',50,'init_batch',500,'print_msg',false);
 
 for a=1:length(shifts1)
     f_names={'shifts','shifts_up','diff'};
@@ -63,20 +109,47 @@ for a=1:length(shifts1)
 %     shifts2(a).(f_names{b})=shifts2(a).(f_names{b})*subsample_factor;
     end
 end
+chunk_size=20000;
+fid_w=fopen(fullfile(path,[name,'_temp.bin']),'w');
+n_chunks=ceil((diff(frames)+1)/chunk_size);
+for chunk_rep=1:n_chunks
+block_size=1000;
+if chunk_rep==n_chunks
+    remainder=mod(diff(frames)+1,chunk_size);
+    remainder(remainder==0)=chunk_size;
+else
+    remainder=chunk_size;
+end
+M_final=zeros([size(m_fid.Data.data,1:2),remainder],'single');
+n_blocks=ceil(remainder/block_size);
+% options_nonrigid = NoRMCorreSetParms('d1',size(data,1),'d2',size(data,2),'grid_size',[12 12]*5,'overlap_pre',[6 6]*5,'mot_uf',4,'bin_width',3000,'max_shift',.2,'max_dev',[20 20],'us_fac',50,'init_batch',500);
+
 for a=1:n_blocks
-    M_final(:,:,min((a-1)*block_size+(1:1000),nf))=apply_shifts(data(:,:,min((a-1)*block_size+(1:1000),nf)),shifts1(min((a-1)*block_size+(1:1000),nf)),options_rigid);
+    M_final(:,:,min((a-1)*block_size+(1:1000),remainder))=apply_shifts(m_fid.Data.data(:,:,min((a-1)*block_size+(1:1000)+frames(1)-1+(chunk_rep-1)*chunk_size,nf_tot)),shifts1(min((a-1)*block_size+(1:1000)+(chunk_rep-1)*chunk_size,nf)),options_rigid);
 end
 % M_final=motcorr_stack;
 M_final=permute(M_final,[2 1 3]);
 M_final=M_final(subsample_factor*3+1:end-subsample_factor*3,subsample_factor*3+1:end-subsample_factor*3,:);
-
-trend=(squeeze(nanmean(nanmean(M_final,1),2)));
+fwrite(fid_w,M_final,'single');
+end
+fclose(fid_w);
+end
+M_final_fid=memmapfile(fullfile(path,[name,'_temp.bin']),'Format',{'single' [f_h-subsample_factor*6 f_w-subsample_factor*6 nf] 'data'},'Writable',true);
+clear M_final
+trend=(squeeze(nanmean(M_final_fid.Data.data,1:2)));
 trend=medfilt1(trend,fr,'truncate');
-M_final=(M_final./reshape(trend,1,1,[])).*nanmean(trend);
-M_final=double(M_final);
-dd=diff(M_final,[],3);
+M_final_fid.Data.data=(M_final_fid.Data.data./reshape(trend,1,1,[])).*nanmean(trend);
+% M_final=double(M_final);
+
 % mask=nanstd(gpuArray(dd),[],3);
-mask=nanstd(dd(:,:,5000:5:end),[],3);
+startin=max(5000-frames(1)+1,1);
+subin=5;
+if startin*2>size(M_final_fid.Data.data,3)
+    startin=1;
+    subin=1;
+end
+dd=M_final_fid.Data.data(:,:,(startin:subin:end-subin)+1)-M_final_fid.Data.data(:,:,startin:subin:end-subin);
+mask=nanstd(dd,[],3);
 mask(:,[1:subsample_factor*5 end-subsample_factor*5+1:end])=NaN;
 mask([1:subsample_factor*3 end-subsample_factor*3+1:end],:)=NaN;
 
@@ -84,15 +157,16 @@ mask=(mask-max(nanmin(mask(:)),0))./(nanmax(mask(:))-max(nanmin(mask(:)),0));
 % mask2=mask;
 % mask2=(mask2-min(mask2(:)))./(max(mask2(:))-min(mask2(:)));
 mask=mask>.5;
-trace=squeeze(nanmean(nanmean(dd.*mask,1),2))/sum(mask(:))./nanmean(mask(:));
+dd=diff(M_final_fid.Data.data(:,:,startin:min(startin+chunk_size,nf)),[],3);
+trace=squeeze(nanmean(dd.*mask,1:2))/sum(mask(:))./nanmean(mask(:));
 trace=trace-movmedian(trace,fr);
 % trace=gather_try(trace);
 tofix=trace>10;
 trace(tofix)=interp1(find(~tofix),trace(~tofix),find(tofix),'linear','extrap');
-A=corr(reshape(dd,[],size(M_final,3)-1)',BandFilt_Order(trace,fr,fr,1,6));
-mask=reshape(A,size(M_final,1:2));
+A=corr(reshape(dd,[],size(dd,3))',BandFilt_Order(trace,fr,fr,1,6));
+mask=reshape(A,size(M_final_fid.Data.data,1:2));
 mask((mask)<max(A(:))*.5)=NaN;
-mask_bg=reshape(A,size(M_final,1:2));
+mask_bg=reshape(A,size(M_final_fid.Data.data,1:2));
 mask_bg((mask_bg)>max(A(:))*.3)=NaN;
 
 mask(isnan(mask))=0;
@@ -160,8 +234,6 @@ end
 frame_stamps=frame_stamps_fixed;
 %%
 
-
-
 for mask_rep=1:3
     switch mask_rep
         case 1
@@ -171,15 +243,28 @@ for mask_rep=1:3
         case 3
             mask=mask_r;
     end
-trace_alt=squeeze(nanmean(M_final.*mask,1:2));
-% dd=diff(M_final.*mask,[],3);
-dd2=dd.*mask;
-subsample_time=10;
-threshold=quantile(dd2(:,:,1:subsample_time:end),.15,3);
-threshold2=quantile(dd2(:,:,1:subsample_time:end),.85,3);
 
-trace2=nanmean(((dd2)<threshold)-((dd2)>threshold2),1:2);
-trace2=(squeeze(trace2));
+M_final=sparse([]);
+n_chunks=ceil(nf/chunk_size);
+for chunk_rep=1:n_chunks
+if chunk_rep==n_chunks
+    remainder=mod(diff(frames)+1,chunk_size);
+    remainder(remainder==0)=chunk_size;
+else
+    remainder=chunk_size;
+end
+M_final=cat(2,M_final,sparse(reshape(double(M_final_fid.Data.data(:,:,(1:remainder)+(chunk_rep-1)*chunk_size)).*mask,[],remainder)));
+end
+trace_alt=full(squeeze(nanmean(M_final,1)))';
+% dd=diff(M_final.*mask,[],3);
+subsample_time=10;
+dd2=diff(M_final,[],2);
+
+threshold=quantile(dd2(:,1:subsample_time:end),.15,2);
+threshold2=quantile(dd2(:,1:subsample_time:end),.85,2);
+
+trace2=nanmean(((dd2)<threshold)-((dd2)>threshold2),1);
+trace2=full(squeeze(trace2)');
 
 trace_alt=trace_alt-movmean(trace_alt,fr);
 
@@ -191,8 +276,10 @@ alt_trace_smooth=interp1(1:length(trace_alt),trace_alt,1:1/resample_factor:lengt
 frame_upsample=interp1(frame_stamps(1:end,1),frame_stamps(1:end,2),1:1/resample_factor:length(frame_stamps)+(resample_factor-1)/resample_factor);
 frame_upsample=[(1:1/resample_factor:length(frame_stamps)+(resample_factor-1)/resample_factor)' frame_upsample'];
 movements=squeeze(nanmean(abs(dd.*mask_bg),1:2));
-movements_smooth=LowFilt_Order(resample(movements,resample_factor,1),fr*5,fr*5*3,.1);
-movements_smooth=[movements_smooth;zeros(resample_factor,1)];
+movements_smooth=interp1(1:length(movements),movements,1:1/resample_factor:length(frame_stamps)+(resample_factor-1)/resample_factor,'pchip')';
+
+movements_smooth=LowFilt_Order(movements_smooth,fr*5,fr*5*3,.1);
+% movements_smooth=[movements_smooth;zeros(resample_factor,1)];
 
 toremove=isnan(frame_upsample(:,2));
 trace_smooth(toremove)=[];
