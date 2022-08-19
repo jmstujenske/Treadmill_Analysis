@@ -13,23 +13,23 @@ timestamp_file=['*',animal_name,'*.txt'];
         matlab_file=['*',animal_name,'*.mat'];
         timestamp_path=dir([time_dir,timestamp_file]);
             if length(timestamp_path)==1
-                timestamp_path=[timestamp_path.folder,'\',timestamp_path.name];
+                timestamp_path=dir2file(timestamp_path);
             end
             bin_path=dir([video_dir,bin_file]);
             if length(bin_path)>1
                 bin_file=['*',animal_name,'*_pupil.bin'];
                 bin_path=dir([video_dir,bin_file]);
             end
-            bin_path=[bin_path.folder,'\',bin_path.name];
+            bin_path=fullfile(bin_path.folder,bin_path.name);
             if isempty(mat_dir)
                 mat_path=[];
             else
-            mat_path=dir([mat_dir,matlab_file]);
+            mat_path=dir(fullfile(mat_dir,matlab_file));
             end
             if ~isempty(mat_path)
 %                 matlab_file=['*',animal_name,'*.mat'];
 %                 mat_path=dir([mat_dir,matlab_file]);
-                mat_path=[mat_path(end).folder,'\',mat_path(end).name];
+                mat_path=fullfile(mat_path(end).folder,mat_path(end).name);
 %             else
 %                mat_path=[mat_path(end).folder,'\',mat_path(end).name];
 % 
