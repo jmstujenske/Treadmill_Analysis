@@ -79,53 +79,63 @@ for stamp_rep=1:length(timestamp_path2)
         data_mat(end-numberoflines+1:end,1)=data_mat(end-numberoflines+1:end,1)-data_mat(end-numberoflines+1,1)+data_mat(1,1)+offset*1e6;
     end
 end
-try
-ox_data=data_mat(:,3);
-ox_data=sgolayfilt(ox_data,3,21);
-fs=1000;
-[yo, fo, to]=mtcsg(ox_data./sqrt(movmean(ox_data.^2,20000)),fs*5,fs,fs,fs-500,1.5);
-[~,in]=max(yo(fo>2 &fo<=15.5,:).*fo(fo>2 &fo<=15.5));
-to=to*fs+fs/2;
-
-error_index=(movmean(nanmean(yo(fo>2 & fo<5,:).*fo(fo>2 & fo<5),1),1));
-error_index=error_index-movmin(error_index,50);
-
-error_index=sqrt(error_index);
-errors=error_index>1.5*nanstd(error_index);
-errors=errors' | fo(in+find(fo<=2,1,'last'))<5;
-
-error_mat=zeros(size(ox_data));
-error_mat(round(to(errors)))=1;
-
-errors=conv(error_mat,ones(1,1000),'same');
-
-[buffer2]=BandFilt_Order(ox_data,fs,100,5,15);
-[peaks, troughs,p_amp,t_amp]=findpeaks(buffer2(51:end));
-peaks=peaks(p_amp>=5);
-peaks=peaks+50;
-peaks(find(diff(peaks)<10)+1)=[];
-% peaks(ismember(peaks,find(errors)))=NaN;
-HR=1e6./[double(data_mat(peaks(5:end),1))-double(data_mat(peaks(1:end-4),1))]*60*4;
-HR(HR<300 | HR>900)=NaN;
-tofix=ismember(peaks(3:end-1),find(errors));
-HR(tofix)=NaN;
-tofix=isnan(HR);
-peaktimes=peaks(3:end-2);
-HR_full=interp1(peaktimes(~tofix),HR(~tofix),1:length(ox_data),'linear');
-peaktimes(tofix)=NaN;
-tofix=abs(HR_full-medfilt1(HR_full,5000))>20;
-peaktimes(ismember(peaktimes,find(tofix)))=NaN;
-HR_full=interp1(find(~tofix),HR_full(~tofix),1:length(ox_data),'linear');
-HR_full(isnan(HR_full))=interp1(find(~isnan(HR_full)),HR_full(~isnan(HR_full)),find(isnan(HR_full)),'linear');
-HR_full2=LowFilt_Order(HR_full,fs,30000,.5);
-data_out.HR=HR_full2;
-data_out.pulse_ox_peaks=peaktimes;
-data_out.HR=uint16(data_out.HR);
-catch
-    data_out.HR=[];
-    data_out.pulse_ox_peaks=[];
-end
+% try
+% ox_data=data_mat(:,3);
+% ox_data=sgolayfilt(ox_data,3,21);
+% fs=1000;
+% [yo, fo, to]=mtcsg(ox_data./sqrt(movmean(ox_data.^2,20000)),fs*5,fs,fs,fs-500,1.5);
+% [~,in]=max(yo(fo>2 &fo<=15.5,:).*fo(fo>2 &fo<=15.5));
+% to=to*fs+fs/2;
+% 
+% error_index=(movmean(nanmean(yo(fo>2 & fo<5,:).*fo(fo>2 & fo<5),1),1));
+% error_index=error_index-movmin(error_index,50);
+% 
+% error_index=sqrt(error_index);
+% errors=error_index>1.5*nanstd(error_index);
+% errors=errors' | fo(in+find(fo<=2,1,'last'))<5;
+% 
+% error_mat=zeros(size(ox_data));
+% error_mat(round(to(errors)))=1;
+% 
+% errors=conv(error_mat,ones(1,1000),'same');
+% 
+% [buffer2]=BandFilt_Order(ox_data,fs,100,5,15);
+% [peaks, troughs,p_amp,t_amp]=findpeaks(buffer2(51:end));
+% peaks=peaks(p_amp>=5);
+% peaks=peaks+50;
+% peaks(find(diff(peaks)<10)+1)=[];
+% % peaks(ismember(peaks,find(errors)))=NaN;
+% HR=1e6./[double(data_mat(peaks(5:end),1))-double(data_mat(peaks(1:end-4),1))]*60*4;
+% HR(HR<300 | HR>900)=NaN;
+% tofix=ismember(peaks(3:end-1),find(errors));
+% HR(tofix)=NaN;
+% tofix=isnan(HR);
+% peaktimes=peaks(3:end-2);
+% HR_full=interp1(peaktimes(~tofix),HR(~tofix),1:length(ox_data),'linear');
+% peaktimes(tofix)=NaN;
+% tofix=abs(HR_full-medfilt1(HR_full,5000))>20;
+% peaktimes(ismember(peaktimes,find(tofix)))=NaN;
+% HR_full=interp1(find(~tofix),HR_full(~tofix),1:length(ox_data),'linear');
+% HR_full(isnan(HR_full))=interp1(find(~isnan(HR_full)),HR_full(~isnan(HR_full)),find(isnan(HR_full)),'linear');
+% HR_full2=LowFilt_Order(HR_full,fs,30000,.5);
+% data_out.HR=HR_full2;
+% data_out.pulse_ox_peaks=peaktimes;
+% data_out.HR=uint16(data_out.HR);
+% catch
+%     data_out.HR=[];
+%     data_out.pulse_ox_peaks=[];
+% end
 data_out.timestamps=data_mat(:,1)-data_mat(1,1);
+
+%%fix when clock resets
+sample_diff=diff((data_out.timestamps));
+discont=find(sample_diff<-1e9)+1;
+if ~isempty(discont)
+samp_space=(median(sample_diff));
+for dis_rep=1:length(discont)
+    data_out.timestamps(discont(dis_rep):end)=data_out.timestamps(discont(dis_rep):end)-data_out.timestamps(discont(dis_rep))+data_out.timestamps(discont(dis_rep)-1)+samp_space;
+end
+end
 data_out.position=data_mat(:,2);
 data_out.pulse_ox_raw=data_mat(:,3);
 data_out.position=uint8(data_out.position);

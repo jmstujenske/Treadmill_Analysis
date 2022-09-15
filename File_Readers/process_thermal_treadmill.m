@@ -1,10 +1,13 @@
-function thermal_data=process_thermal_treadmill(filename,cam_start_time,frames)
+function thermal_data=process_thermal_treadmill(filename,cam_start_time,frames,keep_temp_file)
 
 if nargin<2 || isempty(cam_start_time)
     cam_start_time=0;
 end
 if nargin<3 || isempty(frames)
     frames=[1 inf];
+end
+if nargin<4 || isempty(keep_temp_file)
+    keep_temp_file=false;
 end
 if length(frames)==1
     if ~isinf(frames(1))
@@ -28,7 +31,6 @@ else
     staggered=true;
 end
 % filename='H:\Treadmill_imaging_June2022\videos\grm2_mcherry_M1_licktrain3_thermal';
-
 
 if isstr(filename)
 [path,name,ext]=fileparts(filename);
@@ -389,7 +391,10 @@ for inhale_rep=1:n
     thermal_data(mask_rep).inhale_stats.length(inhale_rep)=val;
 end
 end
-
+if ~keep_temp_file
+    clear M_final_fid
+    delete(fullfile(path,[name,'_temp.bin']));
+end
 % save([path,filename,'.mat'],'thermal_data(mask_rep)');
 
 % thermal_data(mask_rep).inhalations(thermal_data(mask_rep).m_corr_residual>500)=0;

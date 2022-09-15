@@ -8,7 +8,7 @@ end
 if nargin<5 || isempty(thermal_dir)
     thermal_dir=video_dir;
 end
-timestamp_file=['*',animal_name,'*.txt'];
+timestamp_file=['*',animal_name,'.txt'];
         bin_file=['*',animal_name,'*_pupil.bin'];
         matlab_file=['*',animal_name,'*.mat'];
         timestamp_path=dir([time_dir,timestamp_file]);
@@ -20,6 +20,7 @@ timestamp_file=['*',animal_name,'*.txt'];
                 bin_file=['*',animal_name,'*_pupil.bin'];
                 bin_path=dir([video_dir,bin_file]);
             end
+            
             bin_path=fullfile(bin_path.folder,bin_path.name);
             if isempty(mat_dir)
                 mat_path=[];
@@ -59,9 +60,9 @@ timestamp_file=['*',animal_name,'*.txt'];
             try
             data_out=HR_fix2(data_out);
             end
-            try
-                thermal_files=dir([thermal_dir,'*',animal_name,'*_thermal*']);
-                thermal_data=process_thermal_treadmill(thermal_files,data_out.thermal_cam_ontime);
-                data_out.thermal_data=thermal_data;
-                data_out=RR_from_thermal(data_out);
-            end
+%             try
+%                 thermal_files=dir([thermal_dir,'*',animal_name,'*_thermal*']);
+%                 thermal_data=process_thermal_treadmill(thermal_files,data_out.thermal_cam_ontime);
+%                 data_out.thermal_data=thermal_data;
+%                 data_out=RR_from_thermal(data_out);
+%             end

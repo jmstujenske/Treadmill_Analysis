@@ -20,7 +20,7 @@ function [data_out]=process_mat_file(data_out);
     end
     end
     real_mattimes=matdata.Sounds.time-matdata.Sounds.time(1)+matdata.options.FirstTone_delay*1e3;
-    todelete=real_mattimes>fulltime;
+    todelete=real_mattimes>fulltime/1e3;
     S=fieldnames(matdata.Sounds);
     if any(todelete)
     for nS=1:length(S)
