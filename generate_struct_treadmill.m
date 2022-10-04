@@ -60,9 +60,9 @@ timestamp_file=['*',animal_name,'.txt'];
             try
             data_out=HR_fix2(data_out);
             end
-%             try
-%                 thermal_files=dir([thermal_dir,'*',animal_name,'*_thermal*']);
-%                 thermal_data=process_thermal_treadmill(thermal_files,data_out.thermal_cam_ontime);
-%                 data_out.thermal_data=thermal_data;
-%                 data_out=RR_from_thermal(data_out);
-%             end
+            try
+                thermal_files=dir([thermal_dir,'*',animal_name,'*_thermal*']);
+                thermal_data=process_thermal_treadmill(thermal_files,data_out.thermal_cam_ontime);
+                data_out.thermal_data=thermal_data;
+                data_out=RR_from_thermal(data_out);
+            end

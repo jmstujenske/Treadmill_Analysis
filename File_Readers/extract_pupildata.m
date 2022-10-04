@@ -51,31 +51,36 @@ pupil_radius=nanmedian(pupil2(:,[3 4]));
 % pupil2(pupil2(:,1)>upper_lim(1),:)=NaN;
 % pupil2(pupil2(:,2)>upper_lim(2),:)=NaN;
 % nanmean(data_out.pupil.area)-2.5*nanstd(data_out.pupil.area)
-data_out.pupil.area=pupil2(:,5);
-lower=nanmean(data_out.pupil.area)-3*nanstd(data_out.pupil.area);
-upper=nanmean(data_out.pupil.area)+5*nanstd(data_out.pupil.area);
-data_out.pupil.area(data_out.pupil.area<lower | data_out.pupil.area>upper)=NaN;
+for rep=3:5
+temp=pupil2(:,rep);
+lower=nanmean(temp)-3*nanstd(temp);
+upper=nanmean(temp)+5*nanstd(temp);
+pupil2(temp<lower | temp>upper,:)=NaN;
+temp(temp<lower | temp>upper)=NaN;
 while 1
-    ins=find(~isnan(data_out.pupil.area));
+    ins=find(~isnan(temp));
     if ~isempty(data_out.pupil.times)
-    offsets=diff(data_out.pupil.area(ins))./diff(double(data_out.pupil.times(ins)));
+    offsets=diff(temp(ins))./diff(double(data_out.pupil.times(ins)));
     else
-        offsets=diff(data_out.pupil.area(ins))./(diff(ins)*33000);
+        offsets=diff(temp(ins))./(diff(ins)*33000);
     end
     toremove=ins(find(abs(offsets)>.004)+1);
     if ~isempty(toremove)
-    data_out.pupil.area(toremove)=NaN;
+    temp(toremove)=NaN;
+    pupil2(toremove,:)=NaN;
     else
         break;
     end
 end
-scale=max(10.^round(log10(nanmean(round(nanmean(data_out.pupil.radius)/20)))),1);
+end
+data_out.pupil.area=pupil2(:,5);
+radius=pupil2(:,[3 4]);
+scale=max(10.^round(log10(nanmean(round(nanmean(radius)/20)))),1);
 toremove=abs(double(data_out.pupil.area)-medfilt1(double(data_out.pupil.area),90,'omitnan'))>5*scale;
 data_out.pupil.area(toremove)=NaN;
 pupil2(isnan(data_out.pupil.area),:)=NaN;
 data_out.pupil.coords=pupil2(:,[1 2]);
 data_out.pupil.radius=pupil2(:,[3 4]);
-
 tofix=isnan(data_out.pupil.area) | any(data_out.pupil.radius>200*scale,2);
 data_out.pupil.area(tofix)=interp1(find(~tofix),data_out.pupil.area(~tofix),find(tofix));
 data_out.pupil.coords(tofix,1)=interp1(find(~tofix),data_out.pupil.coords(~tofix,1),find(tofix));

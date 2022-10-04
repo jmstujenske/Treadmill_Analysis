@@ -67,9 +67,10 @@ HR_full_interp=LowFilt_Order(HR_full2,1000,10000,.5);
 HR_full2(isnan(HR_full))=HR_full_interp(isnan(HR_full));
 HR_full2(isnan(HR_full2))=interp1(find(~isnan(HR_full2)),HR_full2(~isnan(HR_full2)),find(isnan(HR_full2)),'nearest','extrap');
 peaks_mat=binary_mat2;
+peaks_mat(abs(peaks_mat)>10)=NaN;
 % peaks_mat=peaks_mat./nanmean(peaks_mat);
-HRV=sqrt(movmean(peaks_mat.^2,1000,'omitnan'));
-
+HRV=sqrt(movmean(peaks_mat.^2,3000,'omitnan'));
+HRV(tofix2(:) | errors(:) | toremove(:) | (conv(~isnan(peaks_mat),ones(1,3000),'same')<10)')=NaN;
 HRV_interp=medfilt1(HRV,3000,'omitnan');
 HRV(isnan(HRV))=interp1(find(~isnan(HRV)),HRV_interp(~isnan(HRV)),find(isnan(HRV)),'linear');
 HRV(isnan(HRV))=interp1(find(~isnan(HRV)),HRV(~isnan(HRV)),find(isnan(HRV)),'nearest','extrap');

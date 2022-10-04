@@ -20,7 +20,6 @@ function data_out=addDLCdata_treadmill(data_out,video_dir)
             end
             
         if ~isempty(csv_file)
-            
             DLC_data=importdata(csv_file);
             npoints=(size(DLC_data.data,2)-1)/3;
             coords=[];

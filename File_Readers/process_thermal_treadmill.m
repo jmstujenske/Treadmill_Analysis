@@ -59,9 +59,16 @@ frame_stamps(:,1)=frame_stamps(:,1)+1;
 % frame_stamps(:,1)=1:length(frame_stamps(:,1));
 frame_stamps(:,2)=(frame_stamps(:,2)-frame_stamps(1,2))*1e3+double(cam_start_time);
 frame_stamps=frame_stamps(frames(1):frames(2),:);
-if ~exist(fullfile(path,[name,'_temp.bin']))
-
+if ~exist(fullfile(path,[name,'_temp.bin']),'file')
+if nf_tot>100000
+    mem_mapped=true;
 m_fid=memmapfile(bin_file,'Format',{'uint16' [f_w f_h nf_tot] 'data'},'Writable',true);
+else
+    mem_mapped=false;
+    fid=fopen(bin_file,'r');
+    m_fid.Data.data=fread(fid,inf,'uint16');
+    m_fid.Data.data=reshape(m_fid.Data.data,320,240,[]);
+end
 firstn=1000;
 tofixfirst=double(m_fid.Data.data(:,:,min(1:firstn,nf_tot)))-imgaussfilt(double(m_fid.Data.data(:,:,min(1:firstn,nf_tot))),10)<-10000;
 tocorrect=m_fid.Data.data(:,:,min(1:firstn,nf_tot))<10000 & tofixfirst;
@@ -113,7 +120,12 @@ for a=1:length(shifts1)
 %     shifts2(a).(f_names{b})=shifts2(a).(f_names{b})*subsample_factor;
     end
 end
+if mem_mapped
 fid_w=fopen(fullfile(path,[name,'_temp.bin']),'w');
+else
+    fid_w=[];
+end
+
 n_chunks=ceil((diff(frames)+1)/chunk_size);
 for chunk_rep=1:n_chunks
 block_size=1000;
@@ -133,11 +145,21 @@ end
 % M_final=motcorr_stack;
 M_final=permute(M_final,[2 1 3]);
 M_final=M_final(subsample_factor*3+1:end-subsample_factor*3,subsample_factor*3+1:end-subsample_factor*3,:);
+if mem_mapped
 fwrite(fid_w,M_final,'single');
+else
+    fid_w=cat(3,fid_w,M_final);
 end
+end
+if mem_mapped
 fclose(fid_w);
 end
+end
+if mem_mapped
 M_final_fid=memmapfile(fullfile(path,[name,'_temp.bin']),'Format',{'single' [f_h-subsample_factor*6 f_w-subsample_factor*6 nf] 'data'},'Writable',true);
+else
+    M_final_fid.Data.data=M_final;
+end
 clear M_final
 trend=(squeeze(nanmean(M_final_fid.Data.data,1:2)));
 trend=medfilt1(trend,fr,'truncate');
@@ -391,7 +413,7 @@ for inhale_rep=1:n
     thermal_data(mask_rep).inhale_stats.length(inhale_rep)=val;
 end
 end
-if ~keep_temp_file
+if ~keep_temp_file && mem_mapped
     clear M_final_fid
     delete(fullfile(path,[name,'_temp.bin']));
 end
