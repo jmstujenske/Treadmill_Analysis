@@ -1,9 +1,26 @@
-function [center,radius,area]=findpupil_inframe(frame,input,previouscenter,previousradius)
+function [center,radius,area]=findpupil_inframe(frame,input,previouscenter,previousradius,smooth)
+if nargin<5 || isempty(smooth)
+    smooth=15;
+end
 if nargin<3 || isempty(previouscenter)
     previouscenter=[NaN NaN];
 end
 if nargin<4 || isempty(previousradius)
     previousradius=[NaN NaN];
+end
+if nargin<2 || ~isstruct(input)
+    mv=input(1);
+    if length(input)>1
+            se=strel('disk',input(2));
+
+    else
+        se=strel('disk',1);
+    end
+    input=struct();
+    input.mv=mv;
+    input.se=se;
+    input.eye_window=[1 size(frame,2) 1 size(frame,1)];
+    input.eye_outline=true(size(frame));
 end
 if any(~isnan(previousradius))
 radius2=((input.coords_y-previouscenter(2))./previousradius(2)).^2+((input.coords_x-previouscenter(1))./previousradius(1)).^2;
@@ -22,12 +39,11 @@ frame=frame(input.eye_window(3):input.eye_window(4),input.eye_window(1):input.ey
 % frame=imfilter(imopen(single(frame<=(input.mv+1/255)),input.se), h, 'symmetric', 'conv', 'same');
 % end
 binary_im=false(size(frame));
-% filt=imclose(imopen(frame<=(input.mv+1) &input.eye_outline,strel('disk',1)),strel('disk',5));
-filt=frame<=(input.mv+1) &input.eye_outline;
-
-% CC=bwconncomp(frame<=(input.mv+1) & input.eye_outline);
-CC=bwconncomp(filt);
-
+if ~isempty(input.eye_outline)
+CC=bwconncomp(frame<=(input.mv+1) & input.eye_outline);
+else
+    CC=bwconncomp(frame<=(input.mv+1));
+end
 if CC.NumObjects>0
 numPixels=cellfun(@numel,CC.PixelIdxList);
 [~,in_max]=max(numPixels);
@@ -37,7 +53,7 @@ end
 % binary_im=binary_im ;
 % h = images.internal.createGaussianKernel([1 1], [7 7]);
 % frame=imfilter(imopen(single(binary_im),input.se), h, 'symmetric', 'conv', 'same')>.1;
-frame=imfilter(imopen(single(binary_im),input.se), ones(15,15)/15^2, 'symmetric', 'conv', 'same')>.5;
+frame=imfilter(imopen(single(binary_im),input.se), ones(smooth,smooth)/smooth^2, 'symmetric', 'conv', 'same')>.5;
 % frame=imfilter(single(frame>=.6),h,'symmetric','conv','same');
 % frame=imfilter(single(binary_im), h, 'symmetric', 'conv', 'same')>.6;
 try
